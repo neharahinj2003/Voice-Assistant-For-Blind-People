@@ -3,6 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/black"
     tools:context=".MainActivity">
 
     <!-- Tab Layout -->
@@ -28,16 +29,22 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintTop_toBottomOf="@id/tabLayout">
 
+        <androidx.camera.view.PreviewView
+            android:id="@+id/view_finder"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="visible"/>
+
         <!-- Black Overlay -->
         <TextView
             android:id="@+id/overlayText"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:background="@android:color/black"
+            android:gravity="center"
             android:text="Double Tap to Start Activity"
             android:textColor="@android:color/white"
-            android:gravity="center"
-            android:visibility="gone" />
+            android:visibility="invisible" />
     </FrameLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
