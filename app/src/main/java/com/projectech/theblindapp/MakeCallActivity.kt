@@ -107,7 +107,7 @@ class MakeCallActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
         if (requestCode == SPEECH_REQUEST_CODE && resultCode == Activity.RESULT_OK) {
             val results = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-            val spokenText = results?.get(0)?.toLowerCase(Locale.US) ?: ""
+            val spokenText = results?.get(0)?.lowercase(Locale.US) ?: ""
             postMessage("User: $spokenText")
             processUserResponse(spokenText)
         } else {
