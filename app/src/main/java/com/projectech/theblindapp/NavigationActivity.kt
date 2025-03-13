@@ -11,7 +11,6 @@ import android.os.Bundle
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
-import android.text.InputType
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -21,9 +20,7 @@ import java.util.*
 
 enum class NavigationState {
     NO_SAVED_FOUND_PROMPT,      // No saved destinations exist.
-    CHOOSE_SAVED_OR_NEW,        // Ask: "Where do you want to go? Your saved addresses are ... or say new."
-    GET_NEW_DESTINATION_NAME,   // Ask for new destination name.
-    CONFIRM_NEW_DESTINATION,    // Confirm new destination name.
+    CHOOSE_SAVED_OR_NEW,        // Ask: "Where do you want to go? Your saved addresses are ... "
     CONFIRM_SAVED_DESTINATION,  // Confirm a chosen saved destination.
     GET_DIRECTIONS,             // Retrieve current location and launch maps.
     FINISHED
@@ -88,17 +85,18 @@ class NavigationActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
             tts.language = Locale.US
+
             if (currentState == NavigationState.NO_SAVED_FOUND_PROMPT) {
-                postMessage("App: No saved address found. Do you want to save your current address as a new destination? Please say yes or no.")
-                speakOut("No saved address found. Do you want to save your current address as a new destination? Please say yes or no") {
-                    if (currentState != NavigationState.FINISHED && autoListen) {
-                        promptSpeechInput()
-                    }
+                // No addresses found. Prompt user to add via the dialog (not voice).
+                postMessage("App: No saved address found. Please add new addresses by clicking the top right Button.")
+                speakOut("No saved address found. Please add new addresses by clicking the top right Button.") {
+                    currentState = NavigationState.FINISHED
                 }
             } else {
+                // Some addresses exist; prompt user to choose one.
                 val saved = getSavedDestinations().joinToString(", ") { it.capitalize(Locale.US) }
-                postMessage("App: Where do you want to go? Your saved addresses are $saved, or say new to save a new address.")
-                speakOut("Where do you want to go? Your saved addresses are $saved, or say new to save a new address") {
+                postMessage("App: Where do you want to go? Your saved addresses are $saved.")
+                speakOut("Where do you want to go? Your saved addresses are $saved.") {
                     if (currentState != NavigationState.FINISHED && autoListen) {
                         promptSpeechInput()
                     }
@@ -128,7 +126,7 @@ class NavigationActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         autoListen = false
         if (requestCode == SPEECH_REQUEST_CODE_NAV && resultCode == RESULT_OK) {
             val results = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-            val spokenText = results?.get(0)?.toLowerCase(Locale.US) ?: ""
+            val spokenText = results?.get(0)?.lowercase(Locale.US) ?: ""
             postMessage("User: $spokenText")
             processResponse(spokenText)
         } else {
@@ -139,83 +137,38 @@ class NavigationActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private fun processResponse(response: String) {
         when (currentState) {
             NavigationState.NO_SAVED_FOUND_PROMPT -> {
-                if (response.contains("yes")) {
-                    postMessage("App: Please say the name for your new destination.")
-                    speakOut("Please say the name for your new destination") {
-                        currentState = NavigationState.GET_NEW_DESTINATION_NAME
-                        autoListen = true
-                        promptSpeechInput()
-                    }
-                } else {
-                    postMessage("App: Okay. Exiting navigation.")
-                    speakOut("Okay, exiting navigation.")
+                // We no longer allow adding by voice, so just end or do nothing.
+                postMessage("App: No saved addresses found. Please add a new one from the Saved Addresses.")
+                speakOut("No saved addresses found. Please add a new one from the Saved Addresses.") {
                     currentState = NavigationState.FINISHED
                 }
             }
+
             NavigationState.CHOOSE_SAVED_OR_NEW -> {
-                if (response.contains("new")) {
-                    currentState = NavigationState.GET_NEW_DESTINATION_NAME
-                    postMessage("App: Please say the name for your new destination.")
-                    speakOut("Please say the name for your new destination") {
-                        autoListen = true
-                        promptSpeechInput()
-                    }
-                } else {
-                    destinationName = response.trim()
-                    val saved = getSavedDestinations()
-
-                    // CASE-INSENSITIVE SEARCH: Try to find a saved name that equals the user's input (ignore case).
-                    val matchedName = saved.firstOrNull { it.equals(destinationName, ignoreCase = true) }
-
-                    if (matchedName != null) {
-                        // We found a match in saved destinations
-                        currentState = NavigationState.CONFIRM_SAVED_DESTINATION
-                        postMessage("App: You chose $matchedName. Is that correct? Please say yes or no.")
-                        speakOut("You chose $matchedName. Is that correct? Please say yes or no") {
-                            autoListen = true
-                            promptSpeechInput()
-                        }
-                    } else {
-                        // No case-insensitive match found
-                        postMessage("App: No saved destination found for $destinationName. Would you like to save your current address as $destinationName? Please say yes or no.")
-                        speakOut("No saved destination found for $destinationName. Would you like to save your current address as $destinationName? Please say yes or no") {
-                            autoListen = true
-                            promptSpeechInput()
-                        }
-                        currentState = NavigationState.CONFIRM_SAVED_DESTINATION
-                    }
-                }
-            }
-
-            NavigationState.GET_NEW_DESTINATION_NAME -> {
+                // User must say one of the existing addresses
                 destinationName = response.trim()
-                if (destinationName.isNotEmpty()) {
-                    currentState = NavigationState.CONFIRM_NEW_DESTINATION
-                    postMessage("App: You said $destinationName. Is that correct? Please say yes or no.")
-                    speakOut("You said $destinationName. Is that correct? Please say yes or no") {
+                val saved = getSavedDestinations()
+
+                // CASE-INSENSITIVE SEARCH
+                val matchedName = saved.firstOrNull { it.equals(destinationName, ignoreCase = true) }
+
+                if (matchedName != null) {
+                    // Found a saved address
+                    currentState = NavigationState.CONFIRM_SAVED_DESTINATION
+                    postMessage("App: You chose $matchedName. Is that correct? Please say yes or no.")
+                    speakOut("You chose $matchedName. Is that correct? Please say yes or no") {
                         autoListen = true
                         promptSpeechInput()
                     }
                 } else {
-                    postMessage("App: I didn't catch a destination name. Please say it again.")
-                    speakOut("I didn't catch a destination name. Please say it again") {
-                        autoListen = true
-                        promptSpeechInput()
+                    // No match
+                    postMessage("App: No saved destination found for $destinationName. Please add a new one from the Saved Addresses.")
+                    speakOut("No saved destination found for $destinationName. Please add a new one from the Saved Addresses.") {
+                        currentState = NavigationState.FINISHED
                     }
                 }
             }
-            NavigationState.CONFIRM_NEW_DESTINATION -> {
-                if (response.contains("yes")) {
-                    saveCurrentLocationAsDestination(destinationName)
-                } else {
-                    currentState = NavigationState.GET_NEW_DESTINATION_NAME
-                    postMessage("App: Please say the destination name again.")
-                    speakOut("Okay, please say the destination name again") {
-                        autoListen = true
-                        promptSpeechInput()
-                    }
-                }
-            }
+
             NavigationState.CONFIRM_SAVED_DESTINATION -> {
                 if (response.contains("yes")) {
                     currentState = NavigationState.GET_DIRECTIONS
@@ -224,16 +177,20 @@ class NavigationActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                         getCurrentLocationAndNavigate(destinationName)
                     }
                 } else {
-                    currentState = NavigationState.CHOOSE_SAVED_OR_NEW
+                    // Let user try again or just finish
                     val savedList = getSavedDestinations().joinToString(", ") { it.capitalize(Locale.US) }
-                    postMessage("App: Please say the destination name again. Your saved addresses are: $savedList, or say new to save a new destination.")
-                    speakOut("Please say the destination name again. Your saved addresses are: $savedList, or say new to save a new destination") {
+                    postMessage("App: Please say the destination name again. Your saved addresses are: $savedList.")
+                    speakOut("Please say the destination name again. Your saved addresses are: $savedList.") {
                         autoListen = true
                         promptSpeechInput()
                     }
+                    currentState = NavigationState.CHOOSE_SAVED_OR_NEW
                 }
             }
-            else -> { /* no-op */ }
+
+            else -> {
+                // GET_DIRECTIONS or FINISHED, no-op
+            }
         }
     }
 
@@ -245,6 +202,8 @@ class NavigationActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     // Save current location as the given destination name.
     @SuppressLint("MissingPermission")
     private fun saveCurrentLocationAsDestination(name: String) {
+        // You can still keep this function if you want to save from the UI (dialog),
+        // but it's no longer called via voice flow.
         fusedLocationClient.lastLocation.addOnSuccessListener { location ->
             if (location != null) {
                 val editor = prefs.edit()
@@ -358,13 +317,11 @@ class NavigationActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     // Opens a dialog showing saved addresses and options to add new or remove.
     private fun openSavedAddressesDialog() {
-        // Inflate dialog view.
         val dialogView = layoutInflater.inflate(R.layout.dialog_saved_addresses, null)
         val listView = dialogView.findViewById<ListView>(R.id.listSavedAddresses)
         val btnAddNew = dialogView.findViewById<Button>(R.id.btnAddNew)
         val btnRemove = dialogView.findViewById<Button>(R.id.btnRemove)
 
-        // Get saved addresses.
         val savedList = getSavedDestinations().toList()
         val adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, savedList)
         listView.adapter = adapter
@@ -375,70 +332,64 @@ class NavigationActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             .setNegativeButton("Close", null)
             .create()
 
-        // Handler for "Add New"
+        // "Add New" uses the custom dialog, not voice
         btnAddNew.setOnClickListener {
-            if (ActivityCompat.checkSelfPermission(
-                    this,
-                    Manifest.permission.ACCESS_FINE_LOCATION
-                ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
-                    this,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                return@setOnClickListener
-            }
             fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-                if (location != null) {
-                    // Inflate the custom dialog layout
-                    val dialogView = layoutInflater.inflate(R.layout.dialog_add_address, null)
-                    val etName = dialogView.findViewById<EditText>(R.id.etName)
-                    val etCoordinates = dialogView.findViewById<EditText>(R.id.etCoordinates)
+                val dialogView = layoutInflater.inflate(R.layout.dialog_add_address, null)
+                val etName = dialogView.findViewById<EditText>(R.id.etName)
+                val etCoordinates = dialogView.findViewById<EditText>(R.id.etCoordinates)
 
-                    // Build the AlertDialog using the custom view.
-                    val alertDialog = AlertDialog.Builder(this)
-                        .setView(dialogView)
-                        .create()
+                val alertDialog = AlertDialog.Builder(this)
+                    .setView(dialogView)
+                    .create()
 
-                    // Set up the Cancel button.
-                    dialogView.findViewById<Button>(R.id.btnCancel).setOnClickListener {
-                        alertDialog.dismiss()
+                dialogView.findViewById<Button>(R.id.btnCancel).setOnClickListener {
+                    alertDialog.dismiss()
+                }
+
+                dialogView.findViewById<Button>(R.id.btnSave).setOnClickListener {
+                    val name = etName.text.toString().trim().lowercase(Locale.US)
+                    val coordsString = etCoordinates.text.toString().trim()
+
+                    if (name.isEmpty()) {
+                        Toast.makeText(this, "Name cannot be empty", Toast.LENGTH_SHORT).show()
+                        return@setOnClickListener
                     }
 
-                    // Set up the Save button.
-                    dialogView.findViewById<Button>(R.id.btnSave).setOnClickListener {
-                        val name = etName.text.toString().trim().lowercase(Locale.US)
-                        if (name.isNotEmpty()) {
-                            // Save coordinates with the provided name.
+                    // Parse the typed coordinates
+                    val latLon = coordsString.split(",")
+                    if (latLon.size == 2) {
+                        val lat = latLon[0].trim().toDoubleOrNull()
+                        val lon = latLon[1].trim().toDoubleOrNull()
+                        if (lat != null && lon != null) {
+                            // Store the user-typed coordinates
                             val editor = prefs.edit()
-                            editor.putFloat("${name}_lat", location.latitude.toFloat())
-                            editor.putFloat("${name}_lon", location.longitude.toFloat())
-                            val currentNames =
-                                prefs.getStringSet("destination_names", mutableSetOf())?.toMutableSet()
-                                    ?: mutableSetOf()
+                            editor.putFloat("${name}_lat", lat.toFloat())
+                            editor.putFloat("${name}_lon", lon.toFloat())
+
+                            val currentNames = prefs.getStringSet("destination_names", mutableSetOf())
+                                ?.toMutableSet() ?: mutableSetOf()
                             currentNames.add(name)
                             editor.putStringSet("destination_names", currentNames)
                             editor.apply()
 
-                            Toast.makeText(this, "Saved $name", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this, "Saved $name with custom coordinates", Toast.LENGTH_SHORT).show()
                             alertDialog.dismiss()
-                            // Optionally, refresh your dialog or list here if needed.
                         } else {
-                            Toast.makeText(this, "Name cannot be empty", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this, "Invalid coordinates format", Toast.LENGTH_SHORT).show()
                         }
+                    } else {
+                        Toast.makeText(this, "Please enter coordinates in the format: lat, lon", Toast.LENGTH_SHORT).show()
                     }
-                    alertDialog.show()
-                } else {
-                    Toast.makeText(this, "Unable to retrieve current location", Toast.LENGTH_SHORT)
-                        .show()
                 }
+                alertDialog.show()
             }
         }
 
 
-        // Handler for "Remove"
+        // "Remove" an existing destination
         btnRemove.setOnClickListener {
             if (savedList.isNotEmpty()) {
-                // Let user choose an address to remove.
                 AlertDialog.Builder(this)
                     .setTitle("Remove Destination")
                     .setItems(savedList.toTypedArray()) { _, which ->
@@ -447,7 +398,6 @@ class NavigationActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                         val currentNames = prefs.getStringSet("destination_names", mutableSetOf())?.toMutableSet() ?: mutableSetOf()
                         currentNames.remove(nameToRemove)
                         editor.putStringSet("destination_names", currentNames)
-                        // Optionally remove stored coordinates.
                         editor.remove("${nameToRemove}_lat")
                         editor.remove("${nameToRemove}_lon")
                         editor.apply()
