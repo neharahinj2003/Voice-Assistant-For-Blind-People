@@ -12,7 +12,7 @@
         android:layout_height="wrap_content"
         android:background="@android:color/black"
         app:tabTextColor="@android:color/white"
-        app:tabIndicatorColor="@android:color/holo_blue_light"
+        app:tabIndicatorColor="@color/purple_500"
         app:tabMode="scrollable" />
 
     <!-- FrameLayout for Camera Feed / Black Overlay -->
