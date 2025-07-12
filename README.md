@@ -1,0 +1,1 @@
+The Voice Assistant Android Application for Blind People is a mobile solution designed to help visually impaired users operate smartphones through voice interaction. By combining Text-to-Speech (TTS) and Speech Recognition, the app provides a hands-free, accessible interface that enhances user independence and supports basic smartphone functionality using only voice commands.
